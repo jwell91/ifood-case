@@ -1,1 +1,7 @@
-pyspark 
+Core library for data processing
+pyspark
+
+Libraries for data analysis and visualization
+pandas
+matplotlib
+seaborn

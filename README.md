@@ -2,76 +2,98 @@
 
 ## Descrição do Projeto
 
-Este projeto implementa um pipeline de dados ponta a ponta para o desafio técnico de Arquitetura de Dados. A solução realiza a ingestão, o processamento e a disponibilização para análise dos dados de corridas de táxis amarelos de Nova York, referentes ao período de Janeiro a Maio de 2023.
+Este projeto implementa um pipeline de dados ponta a ponta para o desafio técnico de Arquitetura de Dados do iFood. Esta versão aprimorada refatora a solução original para seguir padrões de código de produção, enriquece a análise de dados com exploração visual e implementa validações de qualidade de dados.
 
-O pipeline foi desenvolvido inteiramente em PySpark no ambiente Databricks Community Edition e segue as melhores práticas para lidar com dados inconsistentes e ambientes de nuvem modernos e seguros. O resultado final é uma tabela Delta limpa, otimizada e pronta para ser consumida por analistas de dados via SQL.
+A solução realiza a ingestão, o processamento, a validação e a disponibilização para análise dos dados de corridas de táxis amarelos de Nova York (Janeiro a Maio de 2023). O pipeline foi desenvolvido em PySpark no ambiente Databricks, resultando em uma tabela Delta limpa, otimizada e confiável, pronta para consumo analítico.
 
-## Estrutura do Pipeline de Dados
+## Arquitetura da Solução
 
-O pipeline de ingestão, contido no notebook `src/ingestao_e_transformacao.ipynb`, segue uma abordagem resiliente em 5 etapas principais:
+O pipeline foi reestruturado para separar o código de engenharia (produção) da análise exploratória (investigação).
 
-1. **Leitura Individual e Isolada:** Os arquivos Parquet são lidos um por um, dentro de um loop, para evitar falhas de leitura causadas por inconsistências de esquema entre os diferentes meses.
+1. **Engenharia de Dados (`src/main.py`):** A lógica de ETL foi migrada de um notebook para um script Python modular e parametrizado. Isso simula um ambiente de produção onde o código é versionado, testável e pode ser agendado em jobs automatizados. O script executa a ingestão, transformação e validação dos dados.
 
-2. **Normalização Imediata:** Para cada arquivo lido, os nomes das colunas são imediatamente padronizados para letras minúsculas, resolvendo conflitos de maiúsculas/minúsculas (`airport_fee` vs. `Airport_fee`).
-
-3. **Seleção e Tipagem:** Apenas as colunas necessárias para a análise são selecionadas e seus tipos de dados são convertidos para um padrão consistente (`IntegerType`, `DoubleType`, etc.).
-
-4. **União Inteligente:** Os DataFrames de cada mês, já limpos e padronizados, são unidos de forma segura usando `unionByName`.
-
-5. **Carregamento e Gerenciamento:** O DataFrame final e limpo é salvo como uma tabela Delta gerenciada pelo Unity Catalog usando o comando `.saveAsTable()`, garantindo compatibilidade com o ambiente Databricks.
+2. **Análise de Dados (`analysis/analises_aprimorado.ipynb`):** Um novo notebook de análise que começa com uma Análise Exploratória de Dados (EDA) para entender a distribuição e a qualidade dos dados. Em seguida, responde às perguntas de negócio com o suporte de visualizações gráficas para facilitar a interpretação dos resultados.
 
 ## Justificativas das Escolhas Técnicas
 
-As decisões de arquitetura foram tomadas para superar desafios específicos encontrados nos dados de origem e no ambiente Databricks Serverless:
+Além das justificativas originais, esta versão incorpora as seguintes decisões:
 
-- **Abordagem de Leitura (Looping Individual):** A tentativa inicial de ler todos os arquivos de uma só vez (`spark.read.load(diretorio)`) falhou repetidamente com erros de `CANNOT_MERGE_SCHEMAS`. Isso ocorreu devido a severas inconsistências nos esquemas dos arquivos Parquet de cada mês. A solução de ler cada arquivo de forma isolada dentro de um loop foi a mais robusta, pois evitou a necessidade de o Spark "adivinhar" um esquema unificado durante a leitura.
+- **Refatoração para Script Python (`.py`):** A migração da lógica de ETL de um notebook para um script Python (`src/main.py`) é uma prática padrão da indústria. Scripts são mais adequados para automação (jobs), testes unitários e integração contínua (CI/CD), separando o código de produção do ambiente interativo de análise.
 
-- **Armazenamento (Unity Catalog Volumes):** O projeto utiliza Volumes do Unity Catalog para a `landing zone`. Esta escolha foi uma necessidade imposta pelo ambiente Databricks Community Edition, que desabilita por segurança o acesso de escrita ao DBFS root (`/FileStore`). O uso de Volumes é a prática moderna e compatível para manipulação de arquivos neste ambiente seguro.
+- **Parametrização do Pipeline:** O script de ingestão foi parametrizado para aceitar caminhos de entrada e nomes de tabela como argumentos. Isso o torna mais flexível e reutilizável, permitindo que o mesmo código seja usado para diferentes ambientes (desenvolvimento, produção) ou fontes de dados sem modificações.
 
-- **Criação da Tabela (`.saveAsTable()`):** A tabela Delta final foi criada com o comando `.saveAsTable()` em vez do tradicional SQL `CREATE TABLE ... LOCATION`. As tentativas com o comando SQL falharam devido a políticas de segurança do Unity Catalog que não suportam a cláusula `LOCATION` apontando para caminhos `dbfs:`. O comando `.saveAsTable()` é a API nativa do PySpark para criar tabelas gerenciadas, deixando que o Databricks gerencie a localização física dos dados, o que é mais seguro e totalmente compatível com o ambiente.
+- **Análise Exploratória e Visualização:** A adição de uma seção de EDA e gráficos (histogramas, gráficos de barras) no notebook de análise é crucial. Isso não apenas valida a qualidade dos dados, mas também enriquece a comunicação dos resultados, tornando os insights mais acessíveis para um público não técnico.
+
+- **Gerenciamento de Dependências (`requirements.txt`):** O arquivo de dependências foi atualizado para incluir bibliotecas de visualização (`matplotlib`, `seaborn`), tornando o ambiente de análise totalmente reprodutível.
 
 ## Estrutura do Repositório
 
 ```
 ifood-case/
 ├── src/
-│   └── ingestao_e_transformacao.ipynb
+│   └── main.py
 ├── analysis/
-│   └── analises.ipynb
+│   └── analises_aprimorado.ipynb
 ├── README.md
 └── requirements.txt
 ```
 
 ## Instruções para Execução
 
-Para replicar esta solução, siga os passos abaixo:
+Para replicar esta solução aprimorada, siga os passos abaixo:
 
-1. **Pré-requisitos:** Uma conta ativa no Databricks Community Edition.
+1. **Pré-requisitos:**
+   
+   - Uma conta ativa no Databricks Community Edition.
+   
+   - Cluster configurado com Databricks Runtime que suporte as bibliotecas do `requirements.txt`.
 
-2. **Dados de Origem:** Baixar os dados **"Yellow Taxi Trip Records"** de Janeiro a Maio de 2023 no formato **Parquet** do site oficial [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page "null").
+2. **Dados de Origem:**
+   
+   - Baixar os dados **"Yellow Taxi Trip Records"** de Janeiro a Maio de 2023 no formato **Parquet** do site oficial [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page "null").
 
 3. **Configuração do Ambiente Databricks:**
    
    - No **Catalog Explorer**, dentro do catálogo `workspace` e do schema `default`, crie um **Managed Volume** com o nome `ifood_landing_zone`.
    
    - Faça o upload dos 5 arquivos `.parquet` baixados para dentro deste volume.
+   
+   - Importe o script `src/main.py` e o notebook `analysis/analises_aprimorado.ipynb` para seu workspace.
 
 4. **Execução do Pipeline de Ingestão:**
    
-   - Importe o notebook `src/ingestao_e_transformacao.ipynb` para o seu workspace no Databricks.
+   - Crie um novo notebook no Databricks para orquestrar a execução do script.
    
-   - Anexe um cluster e execute o notebook do início ao fim. Ao final, a tabela `ifood_challenge.yellow_taxi_trips` estará criada e pronta para uso.
+   - Adicione a seguinte célula e execute-a. O comando `%run` executa o script Python como se fosse um job, passando os parâmetros necessários.
+
+```
+# Parâmetros para o pipelinelanding_path = "/Volumes/workspace/default/ifood_landing_zone/"target_table = "ifood_challenge.yellow_taxi_trips"# Executando o script de ingestão com os parâmetrosdbutils.notebook.run(    path = "./src/main.py",    timeout_seconds = 600,    arguments = {        "landing_path": landing_path,        "target_table": target_table    })
+```
 
 5. **Execução das Análises:**
    
-   - Importe o notebook `analysis/analises.ipynb`.
+   - Abra o notebook `analysis/analises_aprimorado.ipynb`.
    
-   - Execute as células de código SQL para visualizar as respostas para as perguntas do desafio.
+   - Anexe o notebook a um cluster que tenha as bibliotecas `matplotlib` e `seaborn` instaladas.
+   
+   - Execute as células para visualizar a EDA e as respostas para as perguntas do desafio.
 
 ## Análises Realizadas
 
-O notebook `analysis/analises.ipynb` responde às seguintes questões de negócio:
+O notebook `analysis/analises_aprimorado.ipynb` contém:
 
-1. Qual a média de valor total (`total_amount`) recebido por mês?
+1. **Análise Exploratória de Dados (EDA):**
+   
+   - Verificação de schema e tipos de dados.
+   
+   - Estatísticas descritivas das colunas numéricas.
+   
+   - Análise de valores nulos.
+   
+   - Visualização da distribuição do `total_amount` e `passenger_count`.
 
-2. Qual a média de passageiros (`passenger_count`) por hora do dia no mês de Maio?
+2. **Respostas às Perguntas de Negócio (com visualização):**
+   
+   - Qual a média de valor total (`total_amount`) recebido por mês?
+   
+   - Qual a média de passageiros (`passenger_count`) por hora do dia no mês de Maio?
